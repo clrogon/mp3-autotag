@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from mutagen.id3 import ID3, ID3NoHeaderError
 
 MUSICBRAINZ_TRACK_ID_DESC = "MusicBrainz Track Id"
+ACOUSTID_ID_DESC = "Acoustid Id"
 
 
 @dataclass
@@ -20,6 +21,7 @@ class ExistingTags:
     year: str | None = None
     genre: str | None = None
     musicbrainz_track_id: str | None = None
+    acoustid_id: str | None = None
 
     def is_minimally_complete(self) -> bool:
         """True when title, artist and album are all present (spec §6, Tier 0)."""
@@ -76,4 +78,5 @@ def read_existing_tags(file_path: str) -> ExistingTags:
         year=year,
         genre=_first_text(id3, "TCON"),
         musicbrainz_track_id=_txxx(id3, MUSICBRAINZ_TRACK_ID_DESC),
+        acoustid_id=_txxx(id3, ACOUSTID_ID_DESC),
     )

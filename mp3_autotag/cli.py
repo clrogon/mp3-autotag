@@ -15,14 +15,16 @@ from rich.table import Table
 
 from mp3_autotag import __version__, db
 from mp3_autotag.acoustid_client import AcoustidClient
+from mp3_autotag.backup import BackupError, make_backup, rollback_run
 from mp3_autotag.config import Config, ConfigError, load_config
 from mp3_autotag.fingerprint import resolve_fpcalc_path
 from mp3_autotag.logging_setup import configure_logging
 from mp3_autotag.musicbrainz_client import MusicBrainzClient, configure_user_agent
 from mp3_autotag.pipeline import identify_file
 from mp3_autotag.rate_limit import RateLimiter
-from mp3_autotag.scan import iter_mp3_files, scan_path
-from mp3_autotag.tags import existing_tags_from_row
+from mp3_autotag.scan import iter_mp3_files, scan_path, sha256_file
+from mp3_autotag.tagger import TagWriteError, compute_changes, write_tags_atomic
+from mp3_autotag.tags import existing_tags_from_row, read_existing_tags
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
@@ -176,15 +178,126 @@ def review(
 def apply(
     path: Path = typer.Argument(..., exists=True),
     write: bool = typer.Option(False, "--write", help="Actually modify files (default: dry-run)"),
+    from_run: Optional[str] = typer.Option(
+        None, "--run-id", help="Use accepted candidates from this identify run (default: latest)"
+    ),
+    limit: Optional[int] = typer.Option(None, "--limit", help="Process only the first N files"),
 ) -> None:
     """Dry-run by default; --write is required to modify files."""
-    _not_implemented("apply", phase=5)
+    cfg = state.config
+    conn = db.connect(cfg.general.db_path)
+    db.init_schema(conn)
+
+    source_run_id = from_run or db.latest_run_id(conn, "identify")
+    if source_run_id is None:
+        console.print("[red]No `identify` run found — run `mp3-autotag identify` first.[/red]")
+        conn.close()
+        raise typer.Exit(code=1)
+
+    apply_run_id = db.new_run(
+        conn, "apply", json.dumps({"path": str(path), "write": write, "source_run_id": source_run_id})
+    )
+
+    files = iter_mp3_files(path)
+    if limit is not None:
+        files = files[:limit]
+
+    backup_root = Path(cfg.general.backup_dir)
+    changed = skipped_no_match = failed = 0
+
+    for file_path in files:
+        candidate = db.get_accepted_candidate(conn, source_run_id, str(file_path))
+        if candidate is None:
+            skipped_no_match += 1
+            continue
+
+        existing = read_existing_tags(str(file_path))
+        new_values = {
+            "title": candidate["title"] or None,
+            "artist": candidate["artist"],
+            "album": candidate["album"],
+            "year": candidate["year"],
+            "musicbrainz_track_id": candidate["mbid"],
+            "acoustid_id": candidate["acoustid_id"],
+        }
+        changes = compute_changes(existing, new_values)
+        if not changes:
+            continue
+
+        diff_table = Table(title=str(file_path))
+        diff_table.add_column("field")
+        diff_table.add_column("old value")
+        diff_table.add_column("new value")
+        for change in changes:
+            diff_table.add_row(change.field, change.old_value or "", change.new_value)
+        console.print(diff_table)
+
+        if not write:
+            continue
+
+        file_hash_before = sha256_file(file_path)
+        try:
+            make_backup(backup_root, apply_run_id, file_path)
+        except BackupError as exc:
+            console.print(f"[red]{exc}[/red]")
+            failed += 1
+            continue
+
+        try:
+            write_tags_atomic(file_path, changes, cfg)
+        except TagWriteError as exc:
+            console.print(f"[red]{exc}[/red]")
+            failed += 1
+            continue
+
+        file_hash_after = sha256_file(file_path)
+        for change in changes:
+            db.insert_change(
+                conn,
+                apply_run_id,
+                str(file_path),
+                file_hash_before,
+                file_hash_after,
+                change.field,
+                change.old_value,
+                change.new_value,
+                candidate["tier"],
+            )
+        db.update_file_status(conn, str(file_path), "APPLIED")
+        changed += 1
+
+    db.finish_run(conn, apply_run_id, "completed")
+    conn.close()
+
+    mode = "write" if write else "dry-run"
+    console.print(
+        f"\n[bold]apply ({mode})[/bold] — changed={changed} "
+        f"no_accepted_match={skipped_no_match} failed={failed}"
+    )
+    console.print(f"Run ID: [bold]{apply_run_id}[/bold]")
 
 
 @app.command()
 def rollback(run_id: str = typer.Argument(...)) -> None:
     """Restore files from backup for a given apply run."""
-    _not_implemented("rollback", phase=5)
+    cfg = state.config
+    conn = db.connect(cfg.general.db_path)
+    backup_root = Path(cfg.general.backup_dir)
+
+    summary = rollback_run(conn, run_id, backup_root)
+    conn.close()
+
+    table = Table(title=f"rollback: run {run_id}")
+    table.add_column("file")
+    table.add_column("result")
+    for file_path in summary.restored:
+        table.add_row(file_path, "[green]restored[/green]")
+    for file_path, reason in summary.failed:
+        table.add_row(file_path, f"[red]FAILED: {reason}[/red]")
+    console.print(table)
+
+    if summary.failed:
+        raise typer.Exit(code=1)
 
 
 @app.command()

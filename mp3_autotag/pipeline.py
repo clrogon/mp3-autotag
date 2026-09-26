@@ -39,6 +39,7 @@ class StoredCandidate:
     source: str
     score: float
     mbid: str | None
+    acoustid_id: str | None
     duration_s: float | None
     accepted: bool
     raw: dict = field(default_factory=dict)
@@ -65,6 +66,7 @@ def _tier1_to_stored(candidates: list[Tier1Candidate], accepted: Tier1Candidate 
             source=c.source,
             score=c.score,
             mbid=c.recording_mbid,
+            acoustid_id=c.acoustid_id,
             duration_s=c.duration_s,
             accepted=(c is accepted),
             raw=c.raw,
@@ -87,6 +89,7 @@ def _tier2_to_stored(
             source=c.source,
             score=c.score,
             mbid=c.mbid,
+            acoustid_id=None,
             duration_s=c.duration_s,
             accepted=(not force_reject and c is accepted),
             raw=c.raw,

@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS candidates (
     source      TEXT,
     score       REAL,
     mbid        TEXT,
+    acoustid_id TEXT,
     duration_s  REAL,
     accepted    INTEGER NOT NULL DEFAULT 0,
     raw_json    TEXT
@@ -167,8 +168,8 @@ def insert_candidates(conn: sqlite3.Connection, run_id: str, file_path: str, can
         """
         INSERT INTO candidates (
             run_id, file_path, tier, rank, artist, title, album, year,
-            source, score, mbid, duration_s, accepted, raw_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            source, score, mbid, acoustid_id, duration_s, accepted, raw_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -183,6 +184,7 @@ def insert_candidates(conn: sqlite3.Connection, run_id: str, file_path: str, can
                 c.source,
                 c.score,
                 c.mbid,
+                c.acoustid_id,
                 c.duration_s,
                 1 if c.accepted else 0,
                 json.dumps(c.raw),
@@ -217,6 +219,61 @@ def record_identify_result(
 def identify_result_counts(conn: sqlite3.Connection, run_id: str) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT status, COUNT(*) AS n FROM identify_results WHERE run_id = ? GROUP BY status ORDER BY status",
+        (run_id,),
+    ).fetchall()
+
+
+def get_accepted_candidate(conn: sqlite3.Connection, run_id: str, file_path: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT * FROM candidates WHERE run_id = ? AND file_path = ? AND accepted = 1 LIMIT 1",
+        (run_id, file_path),
+    ).fetchone()
+
+
+def insert_change(
+    conn: sqlite3.Connection,
+    run_id: str,
+    file_path: str,
+    file_hash_before: str,
+    file_hash_after: str | None,
+    field_name: str,
+    old_value: str | None,
+    new_value: str | None,
+    source_tier: int | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO changes (
+            run_id, file_path, file_hash_before, file_hash_after,
+            field, old_value, new_value, source_tier, timestamp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            run_id,
+            file_path,
+            file_hash_before,
+            file_hash_after,
+            field_name,
+            old_value,
+            new_value,
+            source_tier,
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+    conn.commit()
+
+
+def update_change_hash_after(conn: sqlite3.Connection, run_id: str, file_path: str, file_hash_after: str) -> None:
+    conn.execute(
+        "UPDATE changes SET file_hash_after = ? WHERE run_id = ? AND file_path = ?",
+        (file_hash_after, run_id, file_path),
+    )
+    conn.commit()
+
+
+def get_changed_files_for_run(conn: sqlite3.Connection, run_id: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT DISTINCT file_path, file_hash_before FROM changes WHERE run_id = ?",
         (run_id,),
     ).fetchall()
 

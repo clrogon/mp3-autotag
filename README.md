@@ -15,7 +15,7 @@ Build phases (see `SPEC.md` §10):
 - [x] Phase 2 — filename parser + Tier 2
 - [x] Phase 3 — Tier 1 (AcoustID) fingerprinting
 - [x] Phase 4 — candidate selection, conflict rule, `identify`/`report`
-- [ ] Phase 5 — `apply`, backups, journal, `rollback`
+- [x] Phase 5 — `apply`, backups, journal, `rollback`
 - [ ] Phase 6 — review CSV export/import
 - [ ] Phase 7 — Tier 3 commercial recognition (optional)
 - [ ] Phase 8 — full setup README
@@ -39,6 +39,8 @@ but skips fingerprinting.
 mp3-autotag scan     <path> [--limit N]
 mp3-autotag identify <path> [--tiers 1,2,3] [--force] [--limit N]
 mp3-autotag report   [<run-id>]
+mp3-autotag apply    <path> [--write] [--run-id <id>] [--limit N]
+mp3-autotag rollback <run-id>
 ```
 
 `identify` needs `ACOUSTID_API_KEY` in the environment for Tier 1, and
@@ -46,8 +48,17 @@ mp3-autotag report   [<run-id>]
 requires a descriptive contact in the User-Agent). Missing either just
 skips that tier for the run rather than failing it.
 
-`review`, `apply`, and `rollback` are wired into the CLI but not
-implemented yet — each prints which build phase it belongs to.
+`apply` writes only the fields an accepted match actually provides —
+title, artist, album, year, and the MusicBrainz/AcoustID IDs. Track/disc
+numbers, genre, album artist and cover art aren't sourced by Tier 1/2 yet
+(no release-track-position or Cover Art Archive lookups implemented), so
+existing values for those fields are always left untouched — never
+blanked, per spec. Every write is preceded by a backup under
+`general.backup_dir/<run-id>/` and journaled in the `changes` table;
+`rollback <run-id>` restores from that backup and verifies the restored
+file's hash.
+
+`review` is wired into the CLI but not implemented yet.
 
 ## Tests
 
