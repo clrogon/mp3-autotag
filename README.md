@@ -14,7 +14,7 @@ Build phases (see `SPEC.md` §10):
 - [x] Phase 1 — project skeleton, config loader, SQLite schema, `scan`
 - [x] Phase 2 — filename parser + Tier 2
 - [x] Phase 3 — Tier 1 (AcoustID) fingerprinting
-- [ ] Phase 4 — candidate selection, conflict rule, `identify`/`report`
+- [x] Phase 4 — candidate selection, conflict rule, `identify`/`report`
 - [ ] Phase 5 — `apply`, backups, journal, `rollback`
 - [ ] Phase 6 — review CSV export/import
 - [ ] Phase 7 — Tier 3 commercial recognition (optional)
@@ -36,12 +36,18 @@ but skips fingerprinting.
 ## Usage so far
 
 ```bash
-mp3-autotag scan <path> [--limit N]
+mp3-autotag scan     <path> [--limit N]
+mp3-autotag identify <path> [--tiers 1,2,3] [--force] [--limit N]
+mp3-autotag report   [<run-id>]
 ```
 
-Other commands (`identify`, `review`, `apply`, `rollback`, `report`) are
-wired into the CLI but not implemented yet — each prints which build phase
-it belongs to.
+`identify` needs `ACOUSTID_API_KEY` in the environment for Tier 1, and
+`general.contact_email` set in `mp3-autotag.toml` for Tier 2 (MusicBrainz
+requires a descriptive contact in the User-Agent). Missing either just
+skips that tier for the run rather than failing it.
+
+`review`, `apply`, and `rollback` are wired into the CLI but not
+implemented yet — each prints which build phase it belongs to.
 
 ## Tests
 

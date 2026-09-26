@@ -42,6 +42,21 @@ def _txxx(id3: ID3, desc: str) -> str | None:
     return value or None
 
 
+def existing_tags_from_row(row) -> ExistingTags:
+    """Reconstruct ExistingTags from a `files` table row (see db.py schema)."""
+    return ExistingTags(
+        title=row["tag_title"],
+        artist=row["tag_artist"],
+        album=row["tag_album"],
+        albumartist=row["tag_albumartist"],
+        track=row["tag_track"],
+        disc=row["tag_disc"],
+        year=row["tag_year"],
+        genre=row["tag_genre"],
+        musicbrainz_track_id=row["tag_musicbrainz_track_id"],
+    )
+
+
 def read_existing_tags(file_path: str) -> ExistingTags:
     try:
         id3 = ID3(file_path)

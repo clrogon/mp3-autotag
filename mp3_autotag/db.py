@@ -7,6 +7,7 @@ run bookkeeping. Table shapes follow spec §7 (journal columns) and §9.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from contextlib import closing
@@ -89,6 +90,15 @@ CREATE TABLE IF NOT EXISTS changes (
     timestamp        TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS identify_results (
+    run_id        TEXT NOT NULL REFERENCES runs(run_id),
+    file_path     TEXT NOT NULL,
+    status        TEXT NOT NULL,
+    accepted_tier INTEGER,
+    error         TEXT,
+    PRIMARY KEY (run_id, file_path)
+);
+
 CREATE TABLE IF NOT EXISTS review_decisions (
     file_path  TEXT PRIMARY KEY REFERENCES files(file_path),
     decision   TEXT NOT NULL,
@@ -147,3 +157,73 @@ def set_api_cache(conn: sqlite3.Connection, cache_key: str, provider: str, respo
         (cache_key, provider, response_json, datetime.now(timezone.utc).isoformat()),
     )
     conn.commit()
+
+
+def insert_candidates(conn: sqlite3.Connection, run_id: str, file_path: str, candidates: list) -> None:
+    """`candidates` is a list of objects with the StoredCandidate shape
+    (see pipeline.py) — kept untyped here to avoid a db.py -> pipeline.py
+    import cycle."""
+    conn.executemany(
+        """
+        INSERT INTO candidates (
+            run_id, file_path, tier, rank, artist, title, album, year,
+            source, score, mbid, duration_s, accepted, raw_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                run_id,
+                file_path,
+                c.tier,
+                c.rank,
+                c.artist,
+                c.title,
+                c.album,
+                c.year,
+                c.source,
+                c.score,
+                c.mbid,
+                c.duration_s,
+                1 if c.accepted else 0,
+                json.dumps(c.raw),
+            )
+            for c in candidates
+        ],
+    )
+    conn.commit()
+
+
+def update_file_status(conn: sqlite3.Connection, file_path: str, status: str) -> None:
+    conn.execute("UPDATE files SET status = ? WHERE file_path = ?", (status, file_path))
+    conn.commit()
+
+
+def record_identify_result(
+    conn: sqlite3.Connection,
+    run_id: str,
+    file_path: str,
+    status: str,
+    accepted_tier: int | None,
+    error: str | None = None,
+) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO identify_results (run_id, file_path, status, accepted_tier, error) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (run_id, file_path, status, accepted_tier, error),
+    )
+    conn.commit()
+
+
+def identify_result_counts(conn: sqlite3.Connection, run_id: str) -> list[sqlite3.Row]:
+    return conn.execute(
+        "SELECT status, COUNT(*) AS n FROM identify_results WHERE run_id = ? GROUP BY status ORDER BY status",
+        (run_id,),
+    ).fetchall()
+
+
+def latest_run_id(conn: sqlite3.Connection, command: str) -> str | None:
+    row = conn.execute(
+        "SELECT run_id FROM runs WHERE command = ? ORDER BY started_at DESC LIMIT 1",
+        (command,),
+    ).fetchone()
+    return row["run_id"] if row is not None else None
