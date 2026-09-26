@@ -131,3 +131,19 @@ def finish_run(conn: sqlite3.Connection, run_id: str, status: str) -> None:
         (status, datetime.now(timezone.utc).isoformat(), run_id),
     )
     conn.commit()
+
+
+def get_api_cache(conn: sqlite3.Connection, cache_key: str) -> str | None:
+    row = conn.execute(
+        "SELECT response_json FROM api_cache WHERE cache_key = ?", (cache_key,)
+    ).fetchone()
+    return row["response_json"] if row is not None else None
+
+
+def set_api_cache(conn: sqlite3.Connection, cache_key: str, provider: str, response_json: str) -> None:
+    conn.execute(
+        "INSERT OR REPLACE INTO api_cache (cache_key, provider, response_json, created_at) "
+        "VALUES (?, ?, ?, ?)",
+        (cache_key, provider, response_json, datetime.now(timezone.utc).isoformat()),
+    )
+    conn.commit()
