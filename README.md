@@ -13,7 +13,7 @@ Build phases (see `SPEC.md` §10):
 
 - [x] Phase 1 — project skeleton, config loader, SQLite schema, `scan`
 - [x] Phase 2 — filename parser + Tier 2
-- [ ] Phase 3 — Tier 1 (AcoustID) fingerprinting
+- [x] Phase 3 — Tier 1 (AcoustID) fingerprinting
 - [ ] Phase 4 — candidate selection, conflict rule, `identify`/`report`
 - [ ] Phase 5 — `apply`, backups, journal, `rollback`
 - [ ] Phase 6 — review CSV export/import
