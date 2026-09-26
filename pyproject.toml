@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mp3-autotag"
+version = "0.1.0"
+description = "Tiered ID3 auto-tagger for MP3 libraries (AcoustID/MusicBrainz fingerprinting, filename fallback, optional commercial recognition, manual review queue)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+  "mutagen>=1.47",
+  "pyacoustid>=1.3",
+  "musicbrainzngs>=0.7",
+  "rapidfuzz>=3.9",
+  "httpx>=0.27",
+  "typer>=0.12",
+  "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+mp3-autotag = "mp3_autotag.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["mp3_autotag*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "live: hits real network APIs; excluded by default (run with -m live)",
+]
+addopts = "-m 'not live'"

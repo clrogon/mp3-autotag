@@ -1,0 +1,36 @@
+[general]
+id3_version = "2.3"
+contact_email = "you@example.com"   # required for MusicBrainz User-Agent
+fpcalc_path = ""                     # empty = find on PATH
+db_path = "mp3-autotag.db"
+backup_dir = "backups"
+
+[thresholds]
+tier1_min_score = 0.90
+tier2_min_score = 88
+tier2_min_margin = 5
+duration_tolerance_s = 3
+conflict_artist_similarity = 50
+
+[tiers]
+enabled = [0, 1, 2]                  # add 3 to enable commercial recognition
+tier3_provider = "audd"              # "audd" | "acrcloud"
+tier3_max_calls_per_run = 50
+
+[tags]
+write_genre = false
+replace_cover = false
+cover_size = 500
+strip_id3v1 = false
+
+[rename]
+enabled = false
+template = "{albumartist}/{album}/{track:02d} - {title}.mp3"
+
+[filename]
+noise_patterns = [
+  '\(official (music )?video\)',
+  '\[\d{3}\s?kbps\]',
+  '\(audio\)',
+  '\blyrics?\b',
+]

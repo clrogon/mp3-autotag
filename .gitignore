@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# runtime state — never committed
+mp3-autotag.db
+mp3-autotag.log*
+backups/
+.env
+
+# local config with real contact email / secrets
+mp3-autotag.toml
